@@ -23,7 +23,10 @@ data:
         tls_key_file = "/vault/config/cert.key"
     }
 
-    backend "inmem" {
+    storage "zookeeper" {
+      address = "zk-cs.default.svc.cluster.local:2181"
+      path    = "vault/"
+      advertise_addr = "https://vault:8200"
     }
 
   cert.pem: |-
