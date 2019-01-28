@@ -22,6 +22,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+const defaultWrappingTTL = "60s"
+
 func init() {
 	RootCmd.Flags().String("config", "", "Path to the configuration file. By default, this is kubernetes-vault.yml in the current working directory.")
 	RootCmd.Flags().String("log-level", "debug", `Log verbosity. Defaults to "debug" and written to stdout and stderr. Supported values: "debug", "error"`)
@@ -33,10 +35,11 @@ type config struct {
 	Vault struct {
 		Addr  string `mapstructure:"addr"`
 		Token string `mapstructure:"token"`
-		TLS struct {
+		TLS   struct {
 			VaultCABackends []string `mapstructure:"vaultCABackends"`
 			CACert          string   `mapstructure:"caCert"`
 		} `mapstructure:"tls"`
+		WrappingTTL string `mapstructure:"wrappingTTL"`
 	} `mapstructure:"vault"`
 
 	Kubernetes struct {
@@ -115,9 +118,13 @@ func (c *config) Validate() error {
 }
 
 func newConfigWithDefaults() *config {
-	return &config{
+	cfg := &config{
 		RaftDir: "/var/lib/kubernetes-vault/",
 	}
+
+	cfg.Vault.WrappingTTL = defaultWrappingTTL
+
+	return cfg
 }
 
 func certificateFromFile(certFile string, keyFile string) (<-chan tls.Certificate, error) {
@@ -138,7 +145,7 @@ func certificateFromFile(certFile string, keyFile string) (<-chan tls.Certificat
 var RootCmd = &cobra.Command{
 	Use:   "kubernetes-vault",
 	Short: "Kubernetes-vaults is a Kubernetes controller that pushes Vault tokens into pods",
-	Long: `Kubernets-vault is a Kubernetes controller that watches new pods for certain annotaions
+	Long: `Kubernetes-vault is a Kubernetes controller that watches new pods for certain annotations
 		and pushes a wrapped secret into an init container in the pod. The init container exchanges
 		the secret and the pod's configured AppRole with Vault for a token and writes the token
 		to a shared volume for the pod. More information at https://github.com/Boostport/kubernetes-vault`,
@@ -231,7 +238,7 @@ var RootCmd = &cobra.Command{
 			}
 		}
 
-		vault, err := client.NewVault(conf.Vault.Addr, conf.Vault.Token, conf.Kubernetes.Service, rootCAResolver, logger)
+		vault, err := client.NewVault(conf.Vault.Addr, conf.Vault.Token, conf.Kubernetes.Service, conf.Vault.WrappingTTL, rootCAResolver, logger)
 
 		if err != nil {
 			logger.Fatalf("Could not create the vault client: %s", err)
